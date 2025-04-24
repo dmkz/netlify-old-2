@@ -2,8 +2,19 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Редирект на новый домен</title>
   <style>
+    /* Чтобы padding и border не вылезали за габариты элемента */
+    *, *::before, *::after {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      overflow-x: hidden; /* защищает от случайного горизонтального скролла */
+      font-family: Arial, sans-serif;
+    }
+
     /* Фон затемнения */
     #overlay {
       position: fixed;
@@ -11,54 +22,56 @@
       width: 100vw; height: 100vh;
       background: rgba(0, 0, 0, 0.5);
       opacity: 0; visibility: hidden;
-      transition: opacity 0.5s ease;
+      transition: opacity 0.3s ease;
       z-index: 1000;
     }
+    #overlay.show {
+      opacity: 1; visibility: visible;
+    }
 
-    /* Окно сообщения */
+    /* Обычное модальное окно */
     #info-window {
       position: fixed;
       top: 50%; left: 50%;
       transform: translate(-50%, -50%) scale(0.8);
+      width: 400px; max-width: 90%;
       background: #fff;
       padding: 2rem;
-      width: 90%;
-      max-width: 420px;
       border-radius: 12px;
       box-shadow: 0 8px 20px rgba(0,0,0,0.2);
-      text-align: center;
       opacity: 0;
-      transition: opacity 0.5s ease, transform 0.5s ease;
+      transition:
+        opacity 0.3s ease,
+        transform 0.3s ease,
+        bottom 0.3s ease;
       z-index: 1001;
-      font-family: 'Arial', sans-serif;
-    }
-
-    /* Плавное появление */
-    #overlay.show {
-      opacity: 1; visibility: visible;
     }
     #info-window.show {
       opacity: 1;
       transform: translate(-50%, -50%) scale(1);
     }
 
-    /* Заголовок */
+    /* Содержимое окна */
     #info-window h2 {
       margin: 0 0 1rem;
       font-size: 1.5rem;
       color: #4e54c8;
+      text-align: center;
     }
-
-    /* Текст ссылки */
     #info-window p {
-      margin: 0.5rem 0 1.5rem;
+      margin: 0 0 1.5rem;
       font-size: 1rem;
       color: #333;
+      text-align: center;
       word-break: break-all;
     }
-
-    /* Стили кнопки */
+    #info-window a {
+      color: #4e54c8;
+      text-decoration: none;
+    }
     #go-button {
+      display: block;
+      margin: 0 auto;
       padding: 0.75rem 1.5rem;
       font-size: 1rem;
       font-weight: bold;
@@ -67,34 +80,58 @@
       border: none;
       border-radius: 6px;
       cursor: pointer;
-      outline: none;
-      transition: transform 0.2s ease;
       animation: pulse 2s ease-in-out infinite;
+      transition: transform 0.2s ease;
     }
     #go-button:hover {
-      transform: scale(1.1);
+      transform: scale(1.05);
     }
-
-    /* Анимация пульсации */
     @keyframes pulse {
       0%,100% { transform: scale(1); }
-      50%    { transform: scale(1.05); }
+      50%    { transform: scale(1.03); }
     }
 
-    /* Ссылка */
-    #new-url {
-      color: #4e54c8;
-      text-decoration: none;
+    /* Мобильный bottom‑sheet для портретной ориентации */
+    @media (max-width: 600px) {
+      #info-window {
+        /* сброс центрирования */
+        top: auto;
+        left: 0;
+        right: 0;
+        bottom: -100%;
+        transform: none !important;
+
+        /* ширина вместе с padding = 100% экрана */
+        width: 100%;
+        max-width: 100%;
+        border-radius: 12px 12px 0 0;
+        padding: 1.5rem 1rem;
+      }
+      #info-window.show {
+        bottom: 0;
+      }
+      #info-window h2 {
+        font-size: 1.25rem;
+      }
+      #info-window p {
+        font-size: 0.95rem;
+        margin-bottom: 1rem;
+      }
+      #go-button {
+        width: 100%;
+        padding: 1rem;
+        font-size: 1.1rem;
+      }
     }
   </style>
 </head>
 <body>
 
-  <!-- Оверлей и окно -->
   <div id="overlay"></div>
   <div id="info-window">
     <h2>Сайт внезапно переехал!</h2>
-    <p>Теперь эта страница доступна по адресу:<br>
+    <p>
+      Теперь эта страница доступна по адресу:<br>
       <a id="new-url" href="#">—</a>
     </p>
     <button id="go-button">Перейти</button>
@@ -105,21 +142,19 @@
       const url = new URL(window.location.href);
       const parts = url.hostname.split('.');
       const idx = parts.indexOf('netlify');
-      if (idx > 0) parts[idx-1] = 'dmkz';
+      if (idx > 0) parts[idx - 1] = 'dmkz';
       url.hostname = parts.join('.');
       const newUrl = url.toString();
 
-      // Вставляем ссылку
       const link = document.getElementById('new-url');
       link.href = newUrl;
       link.textContent = newUrl;
 
-      // Перенаправление по кнопке
-      document.getElementById('go-button').addEventListener('click', () => {
+      document.getElementById('go-button')
+              .addEventListener('click', () => {
         window.location.href = newUrl;
       });
 
-      // Показываем окно
       requestAnimationFrame(() => {
         document.getElementById('overlay').classList.add('show');
         document.getElementById('info-window').classList.add('show');
