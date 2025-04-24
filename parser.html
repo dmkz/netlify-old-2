@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Парсер боёв HeroesWM с модификацией текста</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 20px;
+    }
+    textarea {
+      width: 100%;
+      padding: 8px;
+      margin-bottom: 10px;
+      font-family: monospace;
+    }
+    button {
+      padding: 8px 16px;
+      margin-bottom: 20px;
+    }
+    pre {
+      background-color: #f4f4f4;
+      padding: 15px;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      border: 1px solid #ccc;
+    }
+  </style>
+</head>
+<body>
+  <h1>Парсер боёв HeroesWM</h1>
+  <p>Вставьте текст с записями боёв (любого формата):</p>
+  <textarea id="inputText" rows="15" placeholder="Например:
+73)https://www.heroeswm.ru/war.php?warid=1547755596&show=NHKOVn6B
+15498, разбой
+74)https://www.heroeswm.ru/war.php?warid=1547758771&show=NoD0xiiZ
+15498, гном
+75)https://www.heroeswm.ru/war.php?warid=1547783719&show=N_2QVSFV
+15498,эльф"></textarea>
+  <br>
+  <button id="processBtn">Обработать!</button>
+  
+  <h2>Модифицированный текст</h2>
+  <pre id="result"></pre>
+  
+  <script>
+    // Функция для обработки одного URL боя:
+    // Извлекает параметры, делает запрос к прокси-функции и возвращает объект с найденной подстрокой и исходным URL.
+    async function processBattle(urlStr) {
+      let urlObj;
+      let extractedUrl = ""; // Сохраним найденный URL
+      try {
+        // Ищем URL, удовлетворяющий нужному шаблону
+        const urlMatch = urlStr.match(/https?:\/\/(?:www\.)?(heroeswm\.ru|my\.lordswm\.com|lordswm\.com)\/(?:war\.php|warlog\.php)\?\S*/i);
+        if (!urlMatch) throw new Error("URL не найден");
+        extractedUrl = urlMatch[0];
+        urlObj = new URL(extractedUrl);
+      } catch (e) {
+        return { error: "Неверный формат URL", url: urlStr };
+      }
+      
+      // Извлекаем параметры: warid и show_for_all (или show)
+      const warid = urlObj.searchParams.get('warid');
+      let show_for_all = urlObj.searchParams.get('show_for_all') || urlObj.searchParams.get('show');
+      if (!warid || !show_for_all) {
+        return { error: "Отсутствуют параметры warid/show_for_all", url: extractedUrl };
+      }
+      
+      // Формируем URL запроса к прокси-функции (обращаемся к battle.php)
+      const proxyUrl = `/.netlify/functions/parse-battle?warid=${encodeURIComponent(warid)}&show_for_all=${encodeURIComponent(show_for_all)}`;
+      
+      try {
+        const response = await fetch(proxyUrl);
+        if (!response.ok) {
+          return { error: `Ошибка запроса: ${response.status} ${response.statusText}`, url: extractedUrl };
+        }
+        const html = await response.text();
+        
+        // Ищем подстроку между "К вам присоединились новые отряды: " и "<br />"
+        const startStr = "К вам присоединились новые отряды: ";
+        const endStr = "<br />";
+        const startIndex = html.indexOf(startStr);
+        let extracted = "";
+        if (startIndex !== -1) {
+          const substringStart = startIndex + startStr.length;
+          const endIndex = html.indexOf(endStr, substringStart);
+          if (endIndex !== -1) {
+            extracted = html.substring(substringStart, endIndex).trim();
+          }
+        }
+        if (!extracted) {
+          extracted = "слив";
+        }
+        return { result: extracted, url: extractedUrl };
+      } catch (error) {
+        return { error: error.toString(), url: extractedUrl };
+      }
+    }
+    
+    document.getElementById('processBtn').addEventListener('click', async function() {
+      const inputText = document.getElementById('inputText').value;
+      if (!inputText.trim()) {
+         alert('Пожалуйста, введите текст');
+         return;
+      }
+      
+      const resultElem = document.getElementById('result');
+      resultElem.textContent = "Обработка...\n";
+      
+      // Разбиваем исходный текст на строки
+      const lines = inputText.split(/\r?\n/);
+      
+      // Будущий массив строк результата
+      let outputLines = [];
+      
+      // Проходим по каждой строке
+      for (let line of lines) {
+        // Ищем в строке URL, удовлетворяющий нужному шаблону
+        const regex = /https?:\/\/(?:www\.)?(heroeswm\.ru|my\.lordswm\.com|lordswm\.com)\/(?:war\.php|warlog\.php)\?\S*/i;
+        const match = line.match(regex);
+        
+        if (match) {
+          // Если URL найден, обрабатываем его
+          const originalUrl = match[0];
+          resultElem.textContent += `Обработка: ${originalUrl}\n`;
+          const battleResult = await processBattle(originalUrl);
+          
+          let insertText = "";
+          if (battleResult.error) {
+            insertText = battleResult.error;
+          } else {
+            insertText = battleResult.result;
+          }
+          // Заменяем найденный URL в строке так, чтобы перед ним был наш insertText с запятой
+          // Например, превращаем "73)https://..." в "73) insertText, https://..."
+          line = line.replace(originalUrl, `${insertText}, ${originalUrl}`);
+        }
+        // Добавляем обработанную строку в результат
+        outputLines.push(line);
+      }
+      
+      // Выводим итоговый текст
+      resultElem.textContent = outputLines.join("\n");
+    });
+  </script>
+</body>
+</html>
